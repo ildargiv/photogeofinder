@@ -48,6 +48,14 @@
         </provider>
     </application>
 
+    <!-- Lets the app see which gallery app can pick photos -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PICK" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

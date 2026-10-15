@@ -87,13 +87,22 @@ public class PhotoPickerPlugin extends Plugin {
         openPicker(call);
     }
 
-    /** Android's photo picker: a gallery grid where photos are selected with a tap. Older phones get the file picker. */
+    /**
+     * The phone's own gallery app (Samsung, Xiaomi, Google Photos…), where photos are selected with a tap and
+     * which hands out the original files. Without a gallery app, Android's photo picker.
+     */
     private void openPicker(PluginCall call) {
+        Intent gallery = new Intent(Intent.ACTION_PICK);
+        gallery.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
+        gallery.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        if (gallery.resolveActivity(getContext().getPackageManager()) != null) {
+            startActivityForResult(call, gallery, "picked");
+            return;
+        }
         PickVisualMediaRequest request = new PickVisualMediaRequest.Builder()
             .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
             .build();
-        Intent intent = new ActivityResultContracts.PickMultipleVisualMedia().createIntent(getContext(), request);
-        startActivityForResult(call, intent, "picked");
+        startActivityForResult(call, new ActivityResultContracts.PickMultipleVisualMedia().createIntent(getContext(), request), "picked");
     }
 
     @ActivityCallback
