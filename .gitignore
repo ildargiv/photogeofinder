@@ -2,3 +2,7 @@
 Thumbs.db
 dist/
 *.zip
+desktop/dist/
+desktop/src-tauri/target/
+desktop/src-tauri/icons/
+desktop/src-tauri/gen/

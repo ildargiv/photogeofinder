@@ -466,7 +466,12 @@ input[type=file] { display: none; }
     toast.hidden = false;
   }
   // 1) Установленная программа с сайта (GitHub Pages): новая версия скачивается сама, остаётся перезапустить
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  // Desktop app: open web links in the system browser instead of the app window
+  if (window.__TAURI__?.opener) document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="http"]'); if (!a) return;
+    e.preventDefault(); window.__TAURI__.opener.openUrl(a.href);
+  });
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.__TAURI__) {
     navigator.serviceWorker.register('sw.js').then(reg => {
       const offer = (w) => showToast(t('upd_ready'), { restart: () => w.postMessage('skipWaiting') });
       if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);

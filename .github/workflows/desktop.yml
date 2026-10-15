@@ -1,0 +1,44 @@
+# Builds the Windows installer (PhotoGeoFinder-Setup-vX.Y.Z.exe) with Tauri
+# and attaches it to the GitHub Release.
+name: Windows installer
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the installer to (for example v2.0.0)
+        required: true
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Prepare app files and version
+        shell: bash
+        run: |
+          V="${TAG#v}"
+          mkdir -p desktop/dist
+          cp -r index.html config.js i18n.js sw.js manifest.webmanifest icons vendor desktop/dist/
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" desktop/src-tauri/tauri.conf.json
+          sed -i "0,/^version = .*/s//version = \"$V\"/" desktop/src-tauri/Cargo.toml
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Build installer
+        shell: bash
+        working-directory: desktop
+        run: |
+          npx --yes @tauri-apps/cli@2 icon ../icons/icon-512.png -o src-tauri/icons
+          npx --yes @tauri-apps/cli@2 build --bundles nsis
+          cp src-tauri/target/release/bundle/nsis/*-setup.exe "../PhotoGeoFinder-Setup-$TAG.exe"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: PhotoGeoFinder-Setup-${{ env.TAG }}.exe

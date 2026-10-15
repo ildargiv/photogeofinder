@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Open links to map services in the default browser",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://*" }, { "url": "http://*" }] }
+  ]
+}
