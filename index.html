@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -399,10 +399,10 @@ input[type=file] { display: none; }
   const $ = (id) => document.getElementById(id);
   // ---------- Язык ----------
   const cfgOf = (l) => LANG_CFG[l] || LANG_CFG.en;
-  let lang = 'ru';
+  let lang = 'en';
   try { lang = localStorage.getItem('geofoto.lang') || ''; } catch (e) {}
-  if (!I18N[lang]) { const nl = (navigator.language || 'ru').slice(0, 2).toLowerCase(); lang = I18N[nl] ? nl : 'en'; }
-  const t = (k, v) => { let x = (I18N[lang][k] ?? I18N.ru[k] ?? k); if (v) for (const n in v) x = String(x).split('{' + n + '}').join(v[n]); return x; };
+  if (!I18N[lang]) { const nl = (navigator.language || 'en').slice(0, 2).toLowerCase(); lang = I18N[nl] ? nl : 'en'; }
+  const t = (k, v) => { let x = (I18N[lang][k] ?? I18N.en[k] ?? k); if (v) for (const n in v) x = String(x).split('{' + n + '}').join(v[n]); return x; };
   const loc = () => cfgOf(lang).locale;
   let appName = 'PhotoGeoFinder';
   function applyLang() {
