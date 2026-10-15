@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to attach the installer to (for example v2.0.0)
+        description: Release tag to attach the installer to (for example v2.0.0); the code is taken from the branch the workflow runs on
         required: true
 permissions:
   contents: write
@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ github.event.release.tag_name || github.ref }}
       - name: Prepare app files and version
         shell: bash
         run: |
