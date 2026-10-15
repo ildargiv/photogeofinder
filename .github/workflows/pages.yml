@@ -19,7 +19,7 @@ jobs:
       - name: Update gh-pages branch
         run: |
           mkdir _site
-          cp -r index.html config.js i18n.js sw.js manifest.webmanifest icons vendor _site/
+          cp -r index.html app.js config.js i18n.js sw.js manifest.webmanifest icons vendor _site/
           touch _site/.nojekyll
           cd _site
           git init -q -b gh-pages

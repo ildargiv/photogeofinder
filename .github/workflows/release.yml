@@ -22,7 +22,7 @@ jobs:
       - name: Build zip
         run: |
           mkdir -p dist/PhotoGeoFinder
-          cp -r index.html config.js i18n.js sw.js manifest.webmanifest icons vendor start-windows.bat start-mac-linux.command LICENSE dist/PhotoGeoFinder/
+          cp -r index.html app.js config.js i18n.js sw.js manifest.webmanifest icons vendor start-windows.bat start-mac-linux.command LICENSE dist/PhotoGeoFinder/
           cd dist && zip -r "PhotoGeoFinder-${GITHUB_REF_NAME}.zip" PhotoGeoFinder
       - uses: softprops/action-gh-release@v2
         with:

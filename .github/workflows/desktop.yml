@@ -25,7 +25,7 @@ jobs:
         run: |
           V="${TAG#v}"
           mkdir -p desktop/dist
-          cp -r index.html config.js i18n.js sw.js manifest.webmanifest icons vendor desktop/dist/
+          cp -r index.html app.js config.js i18n.js sw.js manifest.webmanifest icons vendor desktop/dist/
           sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" desktop/src-tauri/tauri.conf.json
           sed -i "0,/^version = .*/s//version = \"$V\"/" desktop/src-tauri/Cargo.toml
       - uses: Swatinem/rust-cache@v2

@@ -1,6 +1,6 @@
 // Офлайн-кэш: оболочка программы кэшируется при установке, шрифты и плитки карт по мере использования.
-const VERSION = 'pgf-2.0.0';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './config.js', './i18n.js', './vendor/exifr.js', './vendor/leaflet.js', './vendor/leaflet.css',
+const VERSION = 'pgf-2.0.1';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './config.js', './i18n.js', './vendor/exifr.js', './vendor/leaflet.js', './vendor/leaflet.css', './vendor/fonts/fonts.css', './app.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/favicon.png'];
 
 self.addEventListener('install', (e) => {
@@ -16,7 +16,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const cacheable = url.origin === location.origin || /fonts\.(googleapis|gstatic)\.com$/.test(url.host) || url.host.endsWith('tile.openstreetmap.org');
+  const cacheable = url.origin === location.origin || url.host.endsWith('tile.openstreetmap.org');
   // Адреса, фото Викисклада и встроенные карты всегда идут напрямую в сеть
   if (!cacheable) return;
   e.respondWith(

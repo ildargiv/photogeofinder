@@ -9,3 +9,7 @@ Online services used at runtime (only the coordinates of a point are sent, never
 OpenStreetMap tiles and Nominatim geocoding ([usage policy](https://operations.osmfoundation.org/policies/nominatim/)),
 Wikimedia Commons and Wikipedia APIs, embedded Google Maps and Yandex Maps, GitHub Releases API (update check).
 Map data © OpenStreetMap contributors.
+
+## Manrope and Unbounded fonts
+- Files: `vendor/fonts/` (from Fontsource 5.3.0)
+- License: SIL Open Font License 1.1, see `vendor/licenses/manrope-OFL.txt` and `vendor/licenses/unbounded-OFL.txt`
