@@ -3,6 +3,7 @@ package io.github.ildargiv.photogeofinder;
 import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
+import android.content.ContentUris;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -12,6 +13,8 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.webkit.MimeTypeMap;
 import androidx.activity.result.ActivityResult;
+import androidx.activity.result.PickVisualMediaRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Logger;
@@ -35,7 +38,8 @@ import java.util.List;
  *
  * Android removes the location from photos that apps open unless the app holds ACCESS_MEDIA_LOCATION
  * and asks for the original file. The WebView's own file chooser does neither, so photos are picked
- * here, copied into the app's cache and read by the page from there. Photos shared to the app
+ * here with Android's photo picker, opened as originals, copied into the app's cache and read by the
+ * page from there. Photos shared to the app
  * ("Share" or "Open with" in the gallery) go the same way. Nothing leaves the device.
  */
 @CapacitorPlugin(
@@ -49,6 +53,7 @@ import java.util.List;
 public class PhotoPickerPlugin extends Plugin {
 
     private static final String DIR = "picked";
+    private static final String LOCAL_PICKER = "com.android.providers.media.photopicker";
 
     @PluginMethod
     public void pick(PluginCall call) {
@@ -72,11 +77,12 @@ public class PhotoPickerPlugin extends Plugin {
         openPicker(call);
     }
 
+    /** Android's photo picker: a gallery grid where photos are selected with a tap. Older phones get the file picker. */
     private void openPicker(PluginCall call) {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("image/*");
-        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        PickVisualMediaRequest request = new PickVisualMediaRequest.Builder()
+            .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
+            .build();
+        Intent intent = new ActivityResultContracts.PickMultipleVisualMedia().createIntent(getContext(), request);
         startActivityForResult(call, intent, "picked");
     }
 
@@ -177,6 +183,21 @@ public class PhotoPickerPlugin extends Plugin {
     /** Opens the file with its location data when Android allows it, otherwise as it is. */
     private InputStream openOriginal(Uri uri) throws Exception {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && getPermissionState("location") == PermissionState.GRANTED) {
+            // The photo picker strips the location. A photo stored on the phone has the same id in the gallery,
+            // and with access to the gallery its original file can be opened.
+            String path = uri.getPath();
+            if (MediaStore.AUTHORITY.equals(uri.getAuthority()) && path != null && path.contains("/picker/") && path.contains(LOCAL_PICKER)) {
+                try {
+                    Uri local = ContentUris.withAppendedId(
+                        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL),
+                        Long.parseLong(uri.getLastPathSegment())
+                    );
+                    InputStream in = getContext().getContentResolver().openInputStream(MediaStore.setRequireOriginal(local));
+                    if (in != null) return in;
+                } catch (Exception e) {
+                    Logger.debug("PhotoPicker", "Gallery original not available for " + uri + ": " + e.getMessage());
+                }
+            }
             Uri media = uri;
             try {
                 if (DocumentsContract.isDocumentUri(getContext(), uri)) media = MediaStore.getMediaUri(getContext(), uri);
