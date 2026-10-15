@@ -6,11 +6,13 @@ import android.content.ClipData;
 import android.content.ContentUris;
 import android.content.Intent;
 import android.database.Cursor;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.webkit.MimeTypeMap;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.PickVisualMediaRequest;
@@ -53,7 +55,6 @@ import java.util.List;
 public class PhotoPickerPlugin extends Plugin {
 
     private static final String DIR = "picked";
-    private static final String LOCAL_PICKER = "com.android.providers.media.photopicker";
 
     @PluginMethod
     public void pick(PluginCall call) {
@@ -70,6 +71,15 @@ public class PhotoPickerPlugin extends Plugin {
             return;
         }
         openPicker(call);
+    }
+
+    /** Opens the app's page in the system settings, where access to photos can be changed. */
+    @PluginMethod
+    public void openSettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", getContext().getPackageName(), null));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
     }
 
     @PermissionCallback
@@ -160,18 +170,25 @@ public class PhotoPickerPlugin extends Plugin {
             try {
                 String name = displayName(uri);
                 File dest = new File(dir, (n++) + "_" + name.replaceAll("[\\\\/:*?\"<>|]", "_"));
-                try (InputStream in = openOriginal(uri); OutputStream os = new FileOutputStream(dest)) {
-                    if (in == null) continue;
-                    byte[] buf = new byte[1 << 16];
-                    int r;
-                    while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
+                // Try the ways to the original file in order and keep the first copy that still has GPS
+                boolean copied = false, located = false;
+                for (Uri source : sources(uri, name)) {
+                    if (!copy(source, dest)) continue;
+                    copied = true;
+                    if (hasLocation(dest)) {
+                        located = true;
+                        break;
+                    }
                 }
+                if (!copied) continue;
                 JSObject f = new JSObject();
                 f.put("path", dest.getAbsolutePath());
                 f.put("name", name);
                 f.put("type", mimeType(uri, name));
                 long modified = lastModified(uri);
                 if (modified > 0) f.put("lastModified", modified);
+                // No GPS and the app is not allowed to see it: the page can suggest opening the settings
+                if (!located && !fullAccess()) f.put("locationHidden", true);
                 out.put(f);
             } catch (Exception e) {
                 Logger.error("PhotoPicker", "Cannot read " + uri, e);
@@ -180,40 +197,90 @@ public class PhotoPickerPlugin extends Plugin {
         return out;
     }
 
-    /** Opens the file with its location data when Android allows it, otherwise as it is. */
-    private InputStream openOriginal(Uri uri) throws Exception {
+    /** Copies through a temporary file, so a failed attempt never spoils an earlier good copy. */
+    private boolean copy(Uri source, File dest) {
+        File part = new File(dest.getPath() + ".part");
+        try (InputStream in = getContext().getContentResolver().openInputStream(source)) {
+            if (in == null) return false;
+            try (OutputStream os = new FileOutputStream(part)) {
+                byte[] buf = new byte[1 << 16];
+                int r;
+                while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
+            }
+            dest.delete();
+            return part.renameTo(dest);
+        } catch (Exception e) {
+            Logger.debug("PhotoPicker", "Cannot open " + source + ": " + e.getMessage());
+            part.delete();
+            return false;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean hasLocation(File file) {
+        try {
+            return new ExifInterface(file.getAbsolutePath()).getLatLong(new float[2]);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** True when Android lets the app read photo locations: always before Android 10, else with both permissions. */
+    private boolean fullAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
+        String read = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? "photos" : "photosLegacy";
+        return getPermissionState("location") == PermissionState.GRANTED && getPermissionState(read) == PermissionState.GRANTED;
+    }
+
+    /**
+     * Where to read the photo from, best first. The photo picker and the file picker hand out copies without
+     * the location; the same photo in the phone's gallery, opened as the original, still has it.
+     */
+    private List<Uri> sources(Uri uri, String name) {
+        List<Uri> list = new ArrayList<>();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && getPermissionState("location") == PermissionState.GRANTED) {
-            // The photo picker strips the location. A photo stored on the phone has the same id in the gallery,
-            // and with access to the gallery its original file can be opened.
-            String path = uri.getPath();
-            if (MediaStore.AUTHORITY.equals(uri.getAuthority()) && path != null && path.contains("/picker/") && path.contains(LOCAL_PICKER)) {
-                try {
-                    Uri local = ContentUris.withAppendedId(
-                        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL),
-                        Long.parseLong(uri.getLastPathSegment())
-                    );
-                    InputStream in = getContext().getContentResolver().openInputStream(MediaStore.setRequireOriginal(local));
-                    if (in != null) return in;
-                } catch (Exception e) {
-                    Logger.debug("PhotoPicker", "Gallery original not available for " + uri + ": " + e.getMessage());
-                }
-            }
-            Uri media = uri;
+            Uri images = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL);
+            // A document from the file picker that belongs to the gallery
             try {
-                if (DocumentsContract.isDocumentUri(getContext(), uri)) media = MediaStore.getMediaUri(getContext(), uri);
-            } catch (Exception ignored) {
-                media = null;
-            }
-            if (media != null && MediaStore.AUTHORITY.equals(media.getAuthority())) {
-                try {
-                    InputStream in = getContext().getContentResolver().openInputStream(MediaStore.setRequireOriginal(media));
-                    if (in != null) return in;
-                } catch (Exception e) {
-                    Logger.debug("PhotoPicker", "Original not available for " + uri + ": " + e.getMessage());
+                if (DocumentsContract.isDocumentUri(getContext(), uri)) {
+                    Uri media = MediaStore.getMediaUri(getContext(), uri);
+                    if (media != null) list.add(MediaStore.setRequireOriginal(media));
                 }
+            } catch (Exception ignored) {}
+            // A photo from the photo picker: find it in the gallery by name and size
+            long size = size(uri);
+            if (size > 0) {
+                try (
+                    Cursor c = getContext()
+                        .getContentResolver()
+                        .query(
+                            images,
+                            new String[] { MediaStore.Images.Media._ID },
+                            MediaStore.Images.Media.DISPLAY_NAME + "=? AND " + MediaStore.Images.Media.SIZE + "=?",
+                            new String[] { name, String.valueOf(size) },
+                            null
+                        )
+                ) {
+                    while (c != null && c.moveToNext()) list.add(MediaStore.setRequireOriginal(ContentUris.withAppendedId(images, c.getLong(0))));
+                } catch (Exception e) {
+                    Logger.debug("PhotoPicker", "Gallery lookup failed for " + name + ": " + e.getMessage());
+                }
+            }
+            if (MediaStore.AUTHORITY.equals(uri.getAuthority())) {
+                try {
+                    list.add(MediaStore.setRequireOriginal(uri));
+                } catch (Exception ignored) {}
             }
         }
-        return getContext().getContentResolver().openInputStream(uri);
+        list.add(uri);
+        return list;
+    }
+
+    private long size(Uri uri) {
+        try (Cursor c = getContext().getContentResolver().query(uri, new String[] { OpenableColumns.SIZE }, null, null, null)) {
+            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getLong(0);
+        } catch (Exception ignored) {}
+        return 0;
     }
 
     private String displayName(Uri uri) {

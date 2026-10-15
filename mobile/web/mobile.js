@@ -46,9 +46,37 @@
       } catch (e) { console.error('PhotoPicker: cannot read', f.name, e); }
     }
     if (!dt.files.length) return;
+    if (files.some(f => f.locationHidden)) locationHint();
     const input = $('fileInput');
     input.files = dt.files;
     input.dispatchEvent(new Event('change'));
+  }
+
+  // Android hid the GPS because the app may not see photo locations: offer the app settings
+  const NOLOC = {
+    ru: ['Android скрыл координаты фото. Разрешите приложению доступ ко всем фото.', 'Настройки'],
+    en: ['Android hid the photo location. Allow the app to access all photos.', 'Settings'],
+    de: ['Android hat den Aufnahmeort ausgeblendet. Erlauben Sie den Zugriff auf alle Fotos.', 'Einstellungen'],
+    es: ['Android ocultó la ubicación de la foto. Permite el acceso a todas las fotos.', 'Ajustes'],
+    fr: ['Android a masqué la position de la photo. Autorisez l’accès à toutes les photos.', 'Paramètres'],
+    pt: ['O Android ocultou a localização da foto. Permita o acesso a todas as fotos.', 'Configurações'],
+    tr: ['Android fotoğrafın konumunu gizledi. Uygulamaya tüm fotoğraflara erişim izni verin.', 'Ayarlar'],
+    zh: ['Android 隐藏了照片的位置。请允许应用访问所有照片。', '设置'],
+    ja: ['Android が写真の位置情報を隠しました。すべての写真へのアクセスを許可してください。', '設定'],
+    ko: ['Android가 사진 위치를 숨겼어요. 앱이 모든 사진에 접근하도록 허용하세요.', '설정'],
+    hi: ['Android ने फ़ोटो की लोकेशन छिपा दी। ऐप को सभी फ़ोटो की अनुमति दें।', 'सेटिंग्स'],
+    id: ['Android menyembunyikan lokasi foto. Izinkan aplikasi mengakses semua foto.', 'Setelan'],
+    vi: ['Android đã ẩn vị trí của ảnh. Hãy cho phép ứng dụng truy cập tất cả ảnh.', 'Cài đặt'],
+    th: ['Android ซ่อนตำแหน่งของรูปไว้ อนุญาตให้แอปเข้าถึงรูปภาพทั้งหมด', 'การตั้งค่า'],
+    ar: ['أخفى Android موقع الصورة. اسمح للتطبيق بالوصول إلى كل الصور.', 'الإعدادات']
+  };
+  function locationHint() {
+    const [text, btn] = NOLOC[document.documentElement.lang] || NOLOC.en;
+    $('toastText').textContent = text;
+    $('toastNotes').hidden = $('toastGo').hidden = true;
+    const r = $('toastRestart'); r.hidden = false; r.textContent = btn;
+    r.onclick = () => { $('toast').hidden = true; Picker.openSettings(); };
+    $('toast').hidden = false;
   }
 
   let picking = false;
