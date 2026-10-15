@@ -1,0 +1,74 @@
+# Builds the Android app (Capacitor) from the same web files.
+# Pull requests: a debug APK is attached to the workflow run for testing.
+# Published release: a signed PhotoGeoFinder-vX.Y.Z.apk is attached to the release.
+# Signing needs four repository secrets, see mobile/README.md.
+name: Android app
+on:
+  pull_request:
+    paths: ['mobile/**', 'index.html', 'app.js', 'config.js', 'i18n.js', 'vendor/**', 'icons/**', '.github/workflows/android.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the APK to (for example v2.1.0); leave empty for a test build
+        required: false
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Check that config.js matches the tag
+        if: env.TAG != ''
+        run: |
+          V="${TAG#v}"
+          grep -q "APP_VERSION = '$V'" config.js || { echo "config.js APP_VERSION does not match $V. Run tools/bump_version.py $V first."; exit 1; }
+      - name: Prepare web files
+        working-directory: mobile
+        run: |
+          npm ci
+          npm run sync
+      - name: Build debug APK
+        if: env.TAG == ''
+        working-directory: mobile/android
+        run: ./gradlew --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: env.TAG == ''
+        with:
+          name: PhotoGeoFinder-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Build signed APK
+        if: env.TAG != ''
+        working-directory: mobile/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "::error::Signing secrets are missing. See mobile/README.md."; exit 1; fi
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/PhotoGeoFinder-$TAG.apk"
+      - uses: softprops/action-gh-release@v2
+        if: env.TAG != ''
+        with:
+          tag_name: ${{ env.TAG }}
+          files: PhotoGeoFinder-${{ env.TAG }}.apk
