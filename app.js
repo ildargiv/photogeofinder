@@ -407,7 +407,7 @@
   async function loadNearbyPhotos(lat, lon, req) {
     const g = $('gallery');
     g.innerHTML = '<div class="skel"></div>'.repeat(4);
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}%7C${lon}&ggsradius=${Math.min(state.radius, 10000)}&ggslimit=40&ggsnamespace=6&prop=imageinfo%7Ccoordinates&iiprop=url&iiurlwidth=320`;
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}%7C${lon}&ggsradius=${Math.min(state.radius, 10000)}&ggslimit=40&ggsnamespace=6&prop=imageinfo%7Ccoordinates&iiprop=url&iiurlwidth=330`;
     try {
       const j = await (await fetch(url)).json();
       if (req !== state.reqId) return;
@@ -430,7 +430,7 @@
   async function loadWiki(lat, lon, req) {
     const box = $('wiki'), blk = $('wikiBlock');
     try {
-      const u = `https://${cfgOf(lang).wiki}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}%7C${lon}&ggsradius=${Math.min(Math.max(state.radius, 1000), 10000)}&ggslimit=8&prop=extracts%7Cpageimages%7Ccoordinates&exintro=1&explaintext=1&exchars=170&exlimit=8&piprop=thumbnail&pithumbsize=160&colimit=8`;
+      const u = `https://${cfgOf(lang).wiki}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggscoord=${lat}%7C${lon}&ggsradius=${Math.min(Math.max(state.radius, 1000), 10000)}&ggslimit=8&prop=extracts%7Cpageimages%7Ccoordinates&exintro=1&explaintext=1&exchars=170&exlimit=8&piprop=thumbnail&pithumbsize=250&colimit=8`;
       const j = await (await fetch(u)).json();
       if (req !== state.reqId) return;
       const pages = Object.values(j.query?.pages || {});
