@@ -1,11 +1,15 @@
-# Push a tag like v2.1.0 to build PhotoGeoFinder-v2.1.0.zip and publish a GitHub Release.
+# Push a tag like v2.1.0 (or publish a release with that tag on GitHub) to build PhotoGeoFinder-v2.1.0.zip and publish a GitHub Release.
 # Desktop copies of the app check this release and offer the download.
 name: Release
 on:
   push:
     tags: ['v*']
+  release:
+    types: [published]
 permissions:
   contents: write
+concurrency:
+  group: release-${{ github.ref_name }}
 jobs:
   release:
     runs-on: ubuntu-latest
