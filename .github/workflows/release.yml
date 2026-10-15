@@ -1,0 +1,26 @@
+# Push a tag like v2.1.0 to build PhotoGeoFinder-v2.1.0.zip and publish a GitHub Release.
+# Desktop copies of the app check this release and offer the download.
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that config.js matches the tag
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          grep -q "APP_VERSION = '$V'" config.js || { echo "config.js APP_VERSION does not match $V. Run tools/bump_version.py $V first."; exit 1; }
+      - name: Build zip
+        run: |
+          mkdir -p dist/PhotoGeoFinder
+          cp -r index.html config.js i18n.js sw.js manifest.webmanifest icons vendor start-windows.bat start-mac-linux.command LICENSE dist/PhotoGeoFinder/
+          cd dist && zip -r "PhotoGeoFinder-${GITHUB_REF_NAME}.zip" PhotoGeoFinder
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/PhotoGeoFinder-${{ github.ref_name }}.zip
+          generate_release_notes: true
