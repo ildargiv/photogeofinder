@@ -1,0 +1,16 @@
+{
+  "name": "photogeofinder-mobile",
+  "private": true,
+  "description": "Android app for PhotoGeoFinder, built with Capacitor from the same web app",
+  "scripts": {
+    "build": "node prepare-web.mjs",
+    "sync": "node prepare-web.mjs && cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

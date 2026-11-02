@@ -1,0 +1,26 @@
+/* Android app: phone layout on top of the web styles. Photo, map and details are stacked in one scrolling page. */
+.native-app body { padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); -webkit-tap-highlight-color: transparent; }
+.native-app header { padding-top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); gap: 8px; }
+.native-app #splash { padding-top: var(--safe-area-inset-top, 0px); }
+/* No folders, drag and drop or browser install in the app */
+.native-app #btnFolder, .native-app #btnInstall, .native-app #folderInput { display: none !important; }
+.native-app .brand { flex: 1 1 auto; min-width: 0; }
+.native-app #btnOpen { padding: 10px 16px; }
+.native-app .search { flex: 1 1 100%; order: 3; }
+.native-app #lang, .native-app #themeSel { order: 4; flex: 1 1 0; min-width: 0; }
+.native-app .btn, .native-app .sel, .native-app .search input { min-height: 42px; }
+.native-app .stage { min-height: 46vh; }
+/* With a photo the stage takes the photo's own height (up to 62% of the screen), no empty bands */
+.native-app .stage:has(#photo:not([hidden])) { min-height: 0; }
+.native-app .stage img#photo { max-height: 62vh; }
+.native-app .drop { cursor: pointer; }
+.native-app .drop:active { background: rgba(255,176,64,.08); }
+.native-app .tabs { scrollbar-width: none; }
+.native-app .tabs::-webkit-scrollbar { display: none; }
+.native-app .mapbox { min-height: 48vh; }
+/* Card under the photo: address, coordinates, time and camera without scrolling */
+.native-app .quick { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; background: var(--panel); border-bottom: 1px solid var(--line); animation: fadeUp .5s var(--ease) both; }
+.native-app .quick .addr { font-size: 17px; }
+.native-app .quick .badge { margin-top: 8px; }
+.native-app .toast { bottom: calc(16px + var(--safe-area-inset-bottom, 0px)); }
+@media (max-width: 380px) { .native-app .wordmark { font-size: 14px; } }
