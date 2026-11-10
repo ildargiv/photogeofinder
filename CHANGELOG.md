@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Release files are published with a `.sha256` checksum file next to them.
+- SECURITY.md and CONTRIBUTING.md added.
+
 ## 2.0.1
 - Fonts are bundled with the app; no requests to Google Fonts.
 - Strict Content Security Policy: scripts only from the app itself, network access limited to the map, address, Wikipedia and update services.
