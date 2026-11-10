@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://upload.wikimedia.org https://tile.openstreetmap.org https://*.tile.openstreetmap.org; connect-src 'self' https://nominatim.openstreetmap.org https://commons.wikimedia.org https://*.wikipedia.org https://api.github.com ipc: http://ipc.localhost; frame-src https://maps.google.com https://www.google.com https://yandex.ru https://*.yandex.ru https://yandex.com https://*.yandex.com https://www.openstreetmap.org; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PhotoGeoFinder</title>
+<meta name="theme-color" content="#0b1418">
+<meta name="description" content="PhotoGeoFinder: free private photo viewer that shows where a photo was taken. GPS from EXIF on Google Maps, Yandex Maps and OpenStreetMap, street address, time and camera, nearby photos and Wikipedia. Photos never leave your device.">
+<meta name="keywords" content="photo location, where was this photo taken, EXIF GPS viewer, geotag viewer, photo map, photo metadata, reverse geocoding, PWA, private photo viewer, где снято фото, геоданные фото, просмотр EXIF">
+<meta property="og:title" content="PhotoGeoFinder">
+<meta property="og:description" content="Photo. Place. Everything around. See where any photo was taken, privately.">
+<meta property="og:image" content="icons/icon-512.png">
+<meta property="og:type" content="website">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+/* Фирменная тема PhotoGeoFinder по умолчанию: ночь, янтарь и бирюза; плюс светлая и тёмная. Слева фото, справа карты и место */
+:root {
+  --bg: #0b1418; --panel: #12202a; --panel2: #182a35; --ink: #e8eef2; --muted: #8da0ad; --line: #22343f;
+  --accent: #ffb040; --accent-soft: rgba(255,176,64,.15); --accent-ink: #1a1100; --teal: #3fd0c0; --teal-soft: rgba(63,208,192,.14);
+  --stage: #08111a; --stage-ink: #cdd8df; --stage-strong: #ffffff; --stage-line: #1a2b36; --strip: #0a151c; --glow: .14;
+  --map-land: #132430; --map-road: #24394a; --map-water: #1b4552; --map-park: #183a30;
+  --shadow: 0 14px 36px rgba(0,0,0,.45); --tile-filter: invert(.92) hue-rotate(180deg) saturate(.7) brightness(.95);
+  --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Unbounded", "Manrope", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Consolas, monospace;
+  --ease: cubic-bezier(.22,.8,.24,1);
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #eef2f4; --panel: #ffffff; --panel2: #f3f6f8; --ink: #14212a; --muted: #5a6b78; --line: #d8e0e6;
+  --accent: #c76a00; --accent-soft: rgba(199,106,0,.12); --accent-ink: #ffffff; --teal: #0b7f77; --teal-soft: rgba(11,127,119,.1);
+  --stage: #e3e9ed; --stage-ink: #3b4a55; --stage-strong: #14212a; --stage-line: #d0d9df; --strip: #d9e1e6; --glow: .18;
+  --map-land: #f4f1ea; --map-road: #ffffff; --map-water: #b9dde3; --map-park: #d5ead2;
+  --shadow: 0 10px 30px rgba(15,30,40,.12); --tile-filter: none; color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #111214; --panel: #18191c; --panel2: #202226; --ink: #ececee; --muted: #9a9ca3; --line: #2b2d32;
+  --accent: #ffb040; --accent-soft: rgba(255,176,64,.13); --accent-ink: #1a1100; --teal: #5fd6c8; --teal-soft: rgba(95,214,200,.12);
+  --stage: #0b0b0d; --stage-ink: #c9cbd0; --stage-strong: #ffffff; --stage-line: #222327; --strip: #0f1012; --glow: .06;
+  --map-land: #1b1c20; --map-road: #2c2e34; --map-water: #1f2c33; --map-park: #1d2a22;
+  --shadow: 0 14px 36px rgba(0,0,0,.5); --tile-filter: invert(.92) hue-rotate(180deg) saturate(.4) brightness(.9); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font-ui); display: flex; flex-direction: column; overflow: hidden; }
+button, input { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pad-x { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* ---------- Шапка ---------- */
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-block: 10px; background: var(--panel); border-bottom: 1px solid var(--line); position: relative; z-index: 5; }
+.brand { font-family: var(--font-display); font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 9px; letter-spacing: .02em; }
+.brand .acc { color: var(--accent); }
+.brand svg { width: 30px; height: 30px; transform-origin: 50% 100%; animation: pinDrop .9s var(--ease) both; }
+.btn { border: 1px solid var(--line); background: var(--panel2); border-radius: 10px; padding: 8px 13px; cursor: pointer; white-space: nowrap; transition: border-color .2s, transform .15s var(--ease), background .2s; }
+.btn:hover { border-color: var(--accent); }
+.btn:active { transform: scale(.96); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.icon { padding: 8px 10px; min-width: 38px; }
+.btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.search { display: flex; gap: 6px; flex: 1 1 260px; min-width: 0; }
+.search input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--panel2); border-radius: 10px; padding: 8px 12px; transition: border-color .2s, box-shadow .2s; }
+.search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.spacer { flex: 0 1 0; }
+
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
+@media (max-width: 860px) { body { overflow: auto; height: auto; min-height: 100%; } main { grid-template-columns: 1fr; } .stage { min-height: 52vh; } .mapbox { min-height: 340px; } .info { overflow: visible; } }
+
+/* ---------- Фото ---------- */
+.left { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--stage); }
+.stage { flex: 1; min-height: 240px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.stage::before { content: ""; position: absolute; inset: -20%; background: radial-gradient(40% 35% at 35% 40%, rgba(255,176,64,var(--glow)), transparent 70%), radial-gradient(35% 30% at 70% 65%, rgba(63,208,192,var(--glow)), transparent 70%); animation: drift 18s ease-in-out infinite alternate; pointer-events: none; }
+.stage img#photo { max-width: 100%; max-height: 100%; object-fit: contain; display: block; position: relative; cursor: zoom-in; }
+.stage img#photo.enter-next { animation: slideIn .55s var(--ease) both; }
+.stage img#photo.enter-prev { animation: slideInPrev .55s var(--ease) both; }
+.stage.zoomed img#photo { max-width: none; max-height: none; width: 100%; height: 100%; object-fit: cover; cursor: zoom-out; }
+.drop { color: var(--stage-ink); text-align: center; padding: 28px; max-width: 440px; position: relative; border: 1.5px dashed var(--accent); border-radius: 22px; margin: 18px; animation: breathe 3.2s ease-in-out infinite; }
+.drop svg { width: 72px; height: 72px; animation: float 3s ease-in-out infinite; }
+.drop b { display: block; font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 10px 0 6px; color: var(--stage-strong); }
+.stage.dragging .drop { background: rgba(255,176,64,.1); border-style: solid; }
+.nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 58px; border: 0; border-radius: 12px; background: rgba(8,14,18,.55); backdrop-filter: blur(6px); color: #fff; font-size: 22px; cursor: pointer; opacity: 0; transition: opacity .25s, background .2s; }
+.stage:hover .nav, .nav:focus-visible { opacity: 1; }
+@media (hover: none) { .nav { opacity: .85; } }
+.nav:hover { background: rgba(255,176,64,.85); color: #1a1100; }
+.nav.prev { left: 12px; } .nav.next { right: 12px; }
+.caption { color: var(--stage-ink); font-size: 12px; padding: 8px 14px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--stage-line); }
+.caption .name { color: var(--stage-strong); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.caption .tools { margin-inline-start: auto; display: flex; gap: 6px; }
+.caption .tools button { border: 1px solid var(--stage-line); background: none; color: var(--stage-ink); border-radius: 8px; padding: 3px 9px; cursor: pointer; font-size: 12px; transition: all .2s; }
+.caption .tools button:hover, .caption .tools button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.strip { display: flex; gap: 7px; overflow-x: auto; padding: 9px 10px; background: var(--strip); scroll-behavior: smooth; }
+.thumb { position: relative; flex: 0 0 auto; width: 76px; height: 56px; border-radius: 9px; overflow: hidden; border: 2px solid transparent; cursor: pointer; background: #1a252c; padding: 0; transition: transform .25s var(--ease), border-color .2s; animation: pop .45s var(--ease) both; }
+.thumb:hover { transform: translateY(-3px); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .75; transition: opacity .2s; }
+.thumb.active { border-color: var(--accent); } .thumb.active img, .thumb:hover img { opacity: 1; }
+.thumb .dot { position: absolute; right: 4px; bottom: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--teal); border: 1.5px solid #000; }
+.thumb .dot:not(.no) { animation: pulse 2.2s ease-out infinite; }
+.thumb .dot.no { background: #6b7a85; }
+
+/* Плашка со временем и камерой поверх фото */
+.badge { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; padding: 10px 14px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); color: var(--ink); animation: fadeUp .5s var(--ease) both; }
+.badge .t { font-family: var(--font-display); font-weight: 500; font-size: 15px; letter-spacing: .01em; }
+.badge .t small { font-family: var(--font-ui); font-size: 12px; opacity: .75; margin-inline-start: 8px; }
+.badge .c { font-size: 13px; color: var(--accent); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge .e { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+
+/* ---------- Правая часть ---------- */
+.right { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-inline-start: 1px solid var(--line); background: var(--panel); }
+.tabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--line); overflow-x: auto; position: relative; }
+.tab { border: 0; background: none; padding: 9px 12px; cursor: pointer; color: var(--muted); white-space: nowrap; transition: color .2s; position: relative; z-index: 1; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+.tab-ind { position: absolute; bottom: 0; height: 2px; background: var(--accent); border-radius: 2px; transition: left .35s var(--ease), width .35s var(--ease); }
+.mapbox { flex: 1 1 50%; min-height: 260px; position: relative; background: var(--panel2); overflow: hidden; }
+.mapbox iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; animation: fade .5s ease both; }
+#overview { position: absolute; inset: 0; background: var(--panel2); }
+#overview .leaflet-tile-pane { filter: var(--tile-filter); }
+.mapbox .empty { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 20px; }
+.maptools { position: absolute; z-index: 500; right: 10px; top: 10px; display: flex; gap: 6px; }
+.maptools .btn { background: var(--panel); box-shadow: var(--shadow); font-size: 12px; padding: 6px 10px; }
+.info { flex: 1 1 50%; overflow: auto; padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+.info > * { animation: fadeUp .5s var(--ease) both; }
+.info > *:nth-child(2) { animation-delay: .05s; } .info > *:nth-child(3) { animation-delay: .1s; } .info > *:nth-child(4) { animation-delay: .15s; } .info > *:nth-child(5) { animation-delay: .2s; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+.addr { font-size: 18px; font-weight: 600; text-wrap: balance; line-height: 1.3; }
+.coords { font-family: var(--font-mono); font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.chip { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; text-decoration: none; color: var(--ink); background: var(--panel2); white-space: nowrap; cursor: pointer; transition: all .2s var(--ease); }
+.chip:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.meta { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; margin: 0; }
+.meta dt { color: var(--muted); } .meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 7px; }
+.gallery a { display: block; position: relative; aspect-ratio: 4/3; border-radius: 10px; overflow: hidden; background: var(--panel2); max-width: 100%; animation: pop .5s var(--ease) both; }
+.gallery a img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s var(--ease); }
+.gallery a:hover img { transform: scale(1.08); }
+.gallery span { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; padding: 8px 6px 3px; background: linear-gradient(transparent, rgba(0,0,0,.7)); color: #fff; }
+.wiki { display: flex; flex-direction: column; gap: 8px; }
+.wiki a { display: grid; grid-template-columns: 64px 1fr; gap: 10px; text-decoration: none; color: var(--ink); padding: 8px; border-radius: 12px; background: var(--panel2); border: 1px solid transparent; transition: all .2s var(--ease); animation: fadeUp .5s var(--ease) both; }
+.wiki a:hover { border-color: var(--accent); transform: translateX(3px); }
+.wiki .ph { width: 64px; height: 64px; border-radius: 9px; background: var(--line) center/cover; }
+.wiki b { display: block; font-weight: 600; } .wiki small { color: var(--muted); display: block; line-height: 1.35; font-size: 12px; }
+.wiki .d { color: var(--accent); font-size: 11px; }
+.skel { aspect-ratio: 4/3; border-radius: 10px; background: linear-gradient(100deg, var(--panel2) 30%, var(--line) 50%, var(--panel2) 70%); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
+.note { color: var(--muted); font-size: 12px; grid-column: 1 / -1; }
+.warn { color: var(--accent); }
+.radius { display: inline-flex; gap: 4px; margin-inline-start: 8px; vertical-align: middle; text-transform: none; letter-spacing: 0; }
+.radius button { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer; color: var(--muted); transition: all .2s; }
+.radius button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+input[type=file] { display: none; }
+.privacy { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--teal); border: 1px solid color-mix(in srgb, var(--teal) 45%, transparent); background: color-mix(in srgb, var(--teal) 10%, transparent); border-radius: 999px; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
+.privacy svg { width: 14px; height: 14px; }
+.modal { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(4,8,11,.65); backdrop-filter: blur(6px); animation: fade .25s ease both; }
+.modal .card { width: min(460px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: var(--shadow); animation: pop .4s var(--ease) both; }
+.modal h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0 0 10px; display: flex; gap: 10px; align-items: center; }
+.modal h2 svg { width: 34px; height: 34px; flex: none; }
+.modal ul { margin: 0 0 16px; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; }
+.modal .perks { gap: 9px; list-style: none; padding-inline-start: 0; }
+.modal .perks li { padding-inline-start: 22px; position: relative; animation: fadeUp .5s var(--ease) both; }
+.modal .perks li::before { content: ""; position: absolute; inset-inline-start: 4px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.modal .perks li:nth-child(2) { animation-delay: .06s } .modal .perks li:nth-child(3) { animation-delay: .12s } .modal .perks li:nth-child(4) { animation-delay: .18s } .modal .perks li:nth-child(5) { animation-delay: .24s } .modal .perks li:nth-child(6) { animation-delay: .3s } .modal .perks li:nth-child(7) { animation-delay: .36s } .modal .perks li:nth-child(8) { animation-delay: .42s }
+.modal .fine { color: var(--muted); font-size: 12px; margin: 14px 0 0; }
+.modal .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.install { display: none; }
+.install.show { display: inline-block; animation: pop .5s var(--ease) both; }
+
+/* Пины на обзорной карте */
+.pin { width: 44px; height: 44px; margin: -22px 0 0 -22px; position: relative; animation: dropIn .6s var(--ease) both; }
+.pin i { position: absolute; inset: 0; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); background: var(--accent); border: 3px solid var(--accent); overflow: hidden; box-shadow: 0 6px 14px rgba(0,0,0,.4); transition: transform .3s var(--ease); }
+.pin img { width: 140%; height: 140%; object-fit: cover; transform: rotate(45deg) translate(-12%, -12%); display: block; }
+.pin.sel i { border-color: #fff; background: #fff; transform: rotate(-45deg) scale(1.25); }
+.pin.sel { z-index: 1000 !important; }
+.leaflet-container { font-family: var(--font-ui); background: var(--panel2); }
+
+.toast { position: fixed; z-index: 2500; inset-inline-end: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: calc(100% - 32px); background: var(--panel); color: var(--ink); border: 1px solid var(--accent); border-radius: 16px; padding: 12px 14px 12px 16px; box-shadow: var(--shadow); animation: fadeUp .5s var(--ease) both; }
+.toast b { font-weight: 600; }
+.toast a { text-decoration: none; }
+/* Заставка */
+#splash { position: fixed; inset: 0; z-index: 3000; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; transition: opacity .6s ease, transform .6s var(--ease); }
+#splash.out { opacity: 0; transform: scale(1.04); pointer-events: none; }
+#splash::before { content: ""; position: absolute; inset: 0; background: radial-gradient(30% 30% at 50% 45%, rgba(255,176,64,var(--glow)), transparent 70%); animation: fade 1.2s ease both; }
+#splash svg { width: 150px; height: 150px; overflow: visible; position: relative; }
+#splash .s-pin { transform-origin: 32px 61px; animation: splashPin .9s var(--ease) both; }
+#splash .s-br { transform-origin: 32px 24px; animation: splashBr .7s var(--ease) .45s both; }
+#splash .s-lens { transform-origin: 32px 24px; animation: pop .5s var(--ease) .35s both; }
+#splash .s-ring { stroke-dasharray: 36; stroke-dashoffset: 36; animation: draw .7s ease-out .7s forwards; }
+#splash .s-ping { transform-origin: 32px 24px; animation: ping 1.4s ease-out 1s both; }
+#splash .s-word { font-family: var(--font-display); font-weight: 600; font-size: 34px; letter-spacing: -.01em; overflow: hidden; position: relative; }
+#splash .s-word span { display: inline-block; animation: rise .7s var(--ease) both; }
+#splash .s-word span.acc { color: var(--accent); animation-delay: .9s; }
+#splash .s-word span:first-child { animation-delay: .75s; }
+#splash .s-tag { color: var(--muted); font-size: 15px; letter-spacing: .04em; animation: fadeUp .6s var(--ease) 1.2s both; position: relative; }
+/* Живая карта до открытия фото */
+.mapbox .empty { background: var(--map-land); }
+.livemap { position: absolute; inset: 0; width: 100%; height: 100%; }
+.livemap .water { fill: none; stroke: var(--map-water); stroke-width: 46; stroke-linecap: round; }
+.livemap .park { fill: var(--map-park); animation: fade 1.2s ease .2s both; }
+.livemap .road { fill: none; stroke: var(--map-road); stroke-linecap: round; stroke-dasharray: 900; stroke-dashoffset: 900; animation: draw 1.6s ease-out forwards; }
+.livemap .route { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 10; opacity: 0; animation: fade .6s ease 1.9s forwards, march 1.2s linear 1.9s infinite; }
+.livemap .mp { opacity: 0; animation: mapPin .7s var(--ease) both; }
+.livemap .mp path { fill: var(--accent); }
+.livemap .mp .lens { fill: var(--bg); }
+.livemap .mp .ring { fill: none; stroke: var(--teal); stroke-width: 2.4; }
+.livemap .sonar { fill: none; stroke: var(--teal); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: sonar 2.4s ease-out 2.4s infinite; opacity: 0; }
+.maphint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; font-size: 13px; box-shadow: var(--shadow); white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; animation: fadeUp .6s var(--ease) 2.2s both; }
+/* Шаги до первого фото */
+.info.empty > :not(.intro) { display: none; }
+.info:not(.empty) > .intro { display: none; }
+.intro { display: flex; flex-direction: column; gap: 10px; }
+.intro h3 { margin: 0 0 4px; font-family: var(--font-display); font-weight: 500; font-size: 18px; }
+.step { display: grid; grid-template-columns: 40px 1fr; gap: 14px; align-items: center; padding: 12px 14px; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; animation: fadeUp .6s var(--ease) both; }
+.step:nth-of-type(2) { animation-delay: .12s } .step:nth-of-type(3) { animation-delay: .24s }
+.step .n { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); }
+.step .n svg { width: 22px; height: 22px; }
+.step b { display: block; } .step small { color: var(--muted); font-size: 13px; }
+.sel { border: 1px solid var(--line); background: var(--panel2); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+/* Сонар вокруг логотипа на пустом экране */
+.drop .logo-wrap { position: relative; width: 84px; height: 84px; margin: 0 auto; }
+.drop .logo-wrap::before, .drop .logo-wrap::after { content: ""; position: absolute; left: 50%; top: 38%; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 2px solid var(--teal); opacity: 0; animation: sonarCss 2.8s ease-out infinite; }
+.drop .logo-wrap::after { animation-delay: 1.4s; }
+.drop .logo-wrap svg { position: relative; width: 84px; height: 84px; }
+@keyframes splashPin { 0% { transform: translateY(-70px) scaleY(1.1); opacity: 0; } 55% { transform: translateY(0) scale(1.06, .9); opacity: 1; } 75% { transform: translateY(-8px); } 100% { transform: none; } }
+@keyframes splashBr { from { transform: scale(1.7) rotate(-20deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes ping { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes rise { from { transform: translateY(110%); } to { transform: none; } }
+@keyframes mapPin { 0% { opacity: 0; transform: translateY(-40px); } 60% { opacity: 1; transform: translateY(3px); } 100% { opacity: 1; transform: none; } }
+@keyframes sonar { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.4); } }
+@keyframes sonarCss { 0% { opacity: .8; transform: scale(.5); } 100% { opacity: 0; transform: scale(2.2); } }
+@keyframes march { to { stroke-dashoffset: -24; } }
+@keyframes drift { from { transform: translate(-3%, -2%); } to { transform: translate(3%, 2%); } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(34px) scale(1.02); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes slideInPrev { from { opacity: 0; transform: translateX(-34px) scale(1.02); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes pinDrop { 0% { transform: translateY(-18px) scaleY(1.1); opacity: 0; } 55% { transform: translateY(0) scaleY(.85); opacity: 1; } 75% { transform: translateY(-5px); } 100% { transform: none; } }
+@keyframes dropIn { from { opacity: 0; transform: translateY(-26px); } to { opacity: 1; transform: none; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes breathe { 0%, 100% { border-color: rgba(255,176,64,.35); } 50% { border-color: rgba(255,176,64,.85); } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(63,208,192,.7); } 70%, 100% { box-shadow: 0 0 0 8px rgba(63,208,192,0); } }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<div id="splash" aria-hidden="true">
+  <svg viewBox="0 0 64 64"><path class="s-pin" d="M32 61C32 61 9 38.5 9 24a23 23 0 0 1 46 0c0 14.5-23 37-23 37z" fill="#FFB040"/><path class="s-br" d="M18 15v-5h5M41 10h5v5M46 33v5h-5M23 38h-5v-5" fill="none" stroke="#0B1418" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle class="s-lens" cx="32" cy="24" r="10.5" fill="#0B1418"/><circle class="s-ring" cx="32" cy="24" r="5.6" fill="none" stroke="#3FD0C0" stroke-width="2.4" transform="rotate(-90 32 24)"/><circle class="s-ping" cx="32" cy="24" r="10" fill="none" stroke="#3FD0C0" stroke-width="1.5"/></svg>
+  <div class="s-word"><span class="wm1">PhotoGeo</span><span class="acc wm2">Finder</span></div>
+  <div class="s-tag" data-i18n="tagline">Фото. Место. Всё вокруг.</div>
+</div>
+<header class="pad-x">
+  <div class="brand">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 61C32 61 9 38.5 9 24a23 23 0 0 1 46 0c0 14.5-23 37-23 37z" fill="#FFB040"/><path d="M18 15v-5h5M41 10h5v5M46 33v5h-5M23 38h-5v-5" fill="none" stroke="#0B1418" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="24" r="10.5" fill="#0B1418"/><circle cx="32" cy="24" r="5.6" fill="none" stroke="#3FD0C0" stroke-width="2.4"/><circle cx="29" cy="21" r="1.7" fill="#E8EEF2"/></svg>
+    <span class="wordmark"><span class="wm1">PhotoGeo</span><span class="acc wm2">Finder</span></span>
+  </div>
+  <button class="btn primary" id="btnOpen" data-i18n="open">Открыть фото</button>
+  <button class="btn" id="btnFolder" data-i18n="folder">Папку</button>
+  <form class="search" id="searchForm">
+    <input id="searchInput" type="search" data-i18n-ph="search_ph" data-i18n-aria="search_aria" placeholder="" aria-label="">
+    <button class="btn" type="submit" data-i18n="find">Найти</button>
+  </form>
+  <select class="sel" id="lang" aria-label="Language"></select>
+  <button class="btn install" id="btnInstall" data-i18n="install">Установить программу</button>
+  <select class="sel" id="themeSel" data-i18n-aria="theme"><option value="brand" data-i18n="theme_brand">Фирменная</option><option value="light" data-i18n="theme_light">Светлая</option><option value="dark" data-i18n="theme_dark">Тёмная</option></select>
+  <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple>
+  <input type="file" id="folderInput" webkitdirectory multiple>
+</header>
+
+<main>
+  <section class="left">
+    <div class="stage" id="stage">
+      <div class="drop" id="dropHint">
+        <div class="logo-wrap"><svg class="droplogo" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 61C32 61 9 38.5 9 24a23 23 0 0 1 46 0c0 14.5-23 37-23 37z" fill="#FFB040"/><path d="M18 15v-5h5M41 10h5v5M46 33v5h-5M23 38h-5v-5" fill="none" stroke="#0B1418" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="24" r="10.5" fill="#0B1418"/><circle cx="32" cy="24" r="5.6" fill="none" stroke="#3FD0C0" stroke-width="2.4"/><circle cx="29" cy="21" r="1.7" fill="#E8EEF2"/></svg></div>
+        <b data-i18n="drop_title">Добро пожаловать</b>
+        <span data-i18n="drop_text">Перетащите сюда фото, и мы покажем, где они сделаны.</span></div>
+      <img id="photo" alt="" hidden>
+      <button class="nav prev" id="prev" data-i18n-aria="prev" hidden>‹</button>
+      <button class="nav next" id="next" data-i18n-aria="next" hidden>›</button>
+    </div>
+    <div class="caption" id="caption" hidden></div>
+    <div class="strip" id="strip" hidden></div>
+  </section>
+
+  <section class="right">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" data-map="google" aria-selected="true">Google</button>
+      <button class="tab" role="tab" data-map="yandex" aria-selected="false" data-i18n="tab_yandex">Яндекс</button>
+      <button class="tab" role="tab" data-map="osm" aria-selected="false">OpenStreetMap</button>
+      <button class="tab" role="tab" data-map="sat" aria-selected="false" data-i18n="tab_sat">Спутник</button>
+      <button class="tab" role="tab" data-map="all" aria-selected="false" data-i18n="tab_all">Все фото</button>
+      <span class="tab-ind" id="tabInd"></span>
+    </div>
+    <div class="mapbox" id="mapbox">
+      <div id="overview" hidden></div>
+      <div class="maptools" id="mapTools" hidden>
+        <button class="btn" id="btnRoute" aria-pressed="false" data-i18n="route">Маршрут</button>
+        <button class="btn" id="btnFit" data-i18n="fit_all">Показать все</button>
+      </div>
+      <div class="empty" id="mapEmpty">
+        <svg class="livemap" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <path class="water" d="M-20 290 C120 250 200 320 330 280 S520 200 640 240"/>
+          <rect class="park" x="380" y="40" width="130" height="80" rx="14"/>
+          <rect class="park" x="40" y="150" width="90" height="70" rx="14"/>
+          <path class="road" stroke-width="12" d="M-20 100 L640 150"/>
+          <path class="road" stroke-width="9" style="animation-delay:.2s" d="M170 -20 L250 400"/>
+          <path class="road" stroke-width="14" style="animation-delay:.35s" d="M470 -20 L420 400"/>
+          <path class="road" stroke-width="6" style="animation-delay:.5s" d="M-20 340 L640 30"/>
+          <path class="road" stroke-width="5" style="animation-delay:.65s" d="M60 -20 C120 120 60 220 120 400"/>
+          <path class="route" d="M110 300 C170 240 200 230 236 190 S330 130 440 120"/>
+          <g class="mp" style="animation-delay:1.2s"><path d="M110 300c0 0-18-17-18-28a18 18 0 0 1 36 0c0 11-18 28-18 28z"/><circle class="lens" cx="110" cy="272" r="8"/><circle class="ring" cx="110" cy="272" r="4"/></g>
+          <g class="mp" style="animation-delay:1.45s"><path d="M236 190c0 0-18-17-18-28a18 18 0 0 1 36 0c0 11-18 28-18 28z"/><circle class="lens" cx="236" cy="162" r="8"/><circle class="ring" cx="236" cy="162" r="4"/></g>
+          <circle class="sonar" cx="440" cy="84" r="16"/>
+          <g class="mp" style="animation-delay:1.7s"><path d="M440 124c0 0-26-25-26-40a26 26 0 0 1 52 0c0 15-26 40-26 40z"/><circle class="lens" cx="440" cy="84" r="11"/><circle class="ring" cx="440" cy="84" r="5.5"/></g>
+        </svg>
+        <div class="maphint" data-i18n="map_empty">Карта появится, когда у фото будут координаты</div>
+      </div>
+    </div>
+    <div class="info empty" id="info">
+      <div class="intro">
+        <h3 data-i18n="intro_title">Три шага до места съёмки</h3>
+        <div class="step"><span class="n"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg></span><div><b data-i18n="intro_1">Откройте фото или папку</b><small data-i18n="intro_1s">Или просто перетащите снимки в окно</small></div></div>
+        <div class="step"><span class="n"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.6-6-11a6 6 0 1 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg></span><div><b data-i18n="intro_2">Увидите место на карте</b><small data-i18n="intro_2s">Адрес, время и камера появятся сами</small></div></div>
+        <div class="step"><span class="n"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg></span><div><b data-i18n="intro_3">Исследуйте окрестности</b><small data-i18n="intro_3s">Снимки местности, панорамы и что рядом</small></div></div>
+      </div>
+      <div>
+        <div class="label" data-i18n="addr_label">Адрес места съёмки</div>
+        <div class="addr" id="addr">—</div>
+      </div>
+      <div>
+        <div class="label" data-i18n="coords_label">Координаты</div>
+        <div class="coords" id="coords">—</div>
+        <div class="badge" id="badge" hidden></div>
+      </div>
+      <div id="linksBlock" hidden>
+        <div class="label" data-i18n="services_label">Открыть место в сервисах</div>
+        <div class="links" id="links"></div>
+      </div>
+      <div>
+        <div class="label"><span data-i18n="others_label">Фото этой местности от других людей</span>
+          <span class="radius" id="radius">
+            <button data-r="300"></button><button data-r="1000" class="on"></button><button data-r="5000"></button>
+          </span>
+        </div>
+        <div class="gallery" id="gallery"></div>
+        <div class="note" id="galleryNote" data-i18n="gallery_note" style="margin-top:6px">Снимки с Викисклада рядом с точкой. Больше уличных фото и панорам открывают кнопки выше.</div>
+      </div>
+      <div id="wikiBlock" hidden>
+        <div class="label" data-i18n="wiki_label">Что здесь рядом (Википедия)</div>
+        <div class="wiki" id="wiki"></div>
+      </div>
+      <div>
+        <div class="label" data-i18n="about_label">О снимке</div>
+        <dl class="meta" id="meta"><dt>Файл</dt><dd>—</dd></dl>
+      </div>
+      <div id="exportBlock" hidden>
+        <button class="btn" id="btnCsv" data-i18n="csv">Сохранить список мест (CSV)</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="privacyModal" hidden role="dialog" aria-modal="true" aria-labelledby="pmTitle">
+  <div class="card">
+    <h2 id="pmTitle"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 61C32 61 9 38.5 9 24a23 23 0 0 1 46 0c0 14.5-23 37-23 37z" fill="#FFB040"/><path d="M18 15v-5h5M41 10h5v5M46 33v5h-5M23 38h-5v-5" fill="none" stroke="#0B1418" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="24" r="10.5" fill="#0B1418"/><circle cx="32" cy="24" r="5.6" fill="none" stroke="#3FD0C0" stroke-width="2.4"/><circle cx="29" cy="21" r="1.7" fill="#E8EEF2"/></svg><span data-i18n="w_title">Добро пожаловать</span></h2>
+    <ul class="perks">
+      <li data-i18n-html="w1"><b>Ваши фото остаются у вас.</b> Они не загружаются на сервер и читаются прямо на вашем устройстве. Без аккаунта, рекламы и слежки.</li>
+      <li data-i18n-html="w2"><b>Место съёмки на карте.</b> Google, Яндекс, OpenStreetMap и спутник в одном окне.</li>
+      <li data-i18n-html="w3"><b>Адрес</b> и координаты любого снимка, а также ссылки на панорамы улиц.</li>
+      <li data-i18n-html="w4"><b>Фото этой местности от других людей</b> и справка из Википедии о том, что рядом.</li>
+      <li data-i18n-html="w5"><b>Все фото на одной карте</b> и маршрут вашей поездки.</li>
+      <li data-i18n-html="w6"><b>Время и камера</b> прямо на снимке.</li>
+      <li data-i18n-html="w7"><b>Поиск места</b> для фото без координат.</li>
+      <li data-i18n-html="w8"><b>Установка как программы</b> и работа без интернета.</li>
+    </ul>
+    <div class="row"><button class="btn primary" id="pmClose" data-i18n="start">Начать</button><button class="btn primary" id="pmInstall" data-i18n="install" hidden>Установить программу</button></div>
+    <p class="fine" data-i18n="w_fine">В интернет уходят только координаты точки, чтобы показать карту и адрес. Сами фото никуда не отправляются.</p>
+  </div>
+</div>
+<div class="toast" id="toast" hidden role="status">
+  <b id="toastText"></b>
+  <a class="btn" id="toastNotes" target="_blank" rel="noopener" hidden></a>
+  <a class="btn primary" id="toastGo" target="_blank" rel="noopener" hidden></a>
+  <button class="btn primary" id="toastRestart" hidden></button>
+  <button class="btn icon" id="toastClose" aria-label="×">×</button>
+</div>
+<script src="config.js"></script>
+<script src="i18n.js"></script>
+<script src="vendor/exifr.js"></script>
+<script src="vendor/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
