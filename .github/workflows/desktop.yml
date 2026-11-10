@@ -38,7 +38,10 @@ jobs:
           npx --yes @tauri-apps/cli@2 icon ../icons/icon-512.png -o src-tauri/icons
           npx --yes @tauri-apps/cli@2 build --bundles nsis
           cp src-tauri/target/release/bundle/nsis/*-setup.exe "../PhotoGeoFinder-Setup-$TAG.exe"
+          cd .. && sha256sum "PhotoGeoFinder-Setup-$TAG.exe" > "PhotoGeoFinder-Setup-$TAG.exe.sha256"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          files: PhotoGeoFinder-Setup-${{ env.TAG }}.exe
+          files: |
+            PhotoGeoFinder-Setup-${{ env.TAG }}.exe
+            PhotoGeoFinder-Setup-${{ env.TAG }}.exe.sha256

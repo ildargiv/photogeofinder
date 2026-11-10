@@ -24,7 +24,11 @@ jobs:
           mkdir -p dist/PhotoGeoFinder
           cp -r index.html app.js config.js i18n.js sw.js manifest.webmanifest icons vendor start-windows.bat start-mac-linux.command LICENSE dist/PhotoGeoFinder/
           cd dist && zip -r "PhotoGeoFinder-${GITHUB_REF_NAME}.zip" PhotoGeoFinder
+          sha256sum "PhotoGeoFinder-${GITHUB_REF_NAME}.zip" > "PhotoGeoFinder-${GITHUB_REF_NAME}.zip.sha256"
+          cat "PhotoGeoFinder-${GITHUB_REF_NAME}.zip.sha256"
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/PhotoGeoFinder-${{ github.ref_name }}.zip
+          files: |
+            dist/PhotoGeoFinder-${{ github.ref_name }}.zip
+            dist/PhotoGeoFinder-${{ github.ref_name }}.zip.sha256
           generate_release_notes: true
